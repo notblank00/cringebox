@@ -6,6 +6,7 @@
 
 const char* ssid     = "444-techteam";
 const char* password = "00000444";
+const char* tcp_db = "";
 
 bool taken[3];
 
@@ -13,7 +14,7 @@ AsyncWebServer server(80);
 
 void setup(){
   Serial.begin(9600);
-  WiFi.softAP(ssid, password);
+  WiFi.begin(ssid, password);
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     AsyncResponseStream *response = request->beginResponseStream("text/html");
     response->print("<!DOCTYPE html><html><head><title>SHARING BOX by 444 Tech Team</title><style>");
@@ -40,6 +41,7 @@ void setup(){
     response->print("</p></div>");
     response->print("<button type=\"button\" onclick=\"window.location.href='/unlock3'\">Unlock</button><hr>");
     response->print("<button type=\"button\" onclick=\"window.location.href='/unlock_all'\">Unlock all</button>");
+    response->print("<button type=\"button\" onclick=\"window.location.href='/auth_db'\">Authorize this device as a database</button>");
     response->print("</body></html>");
     request->send(response);
   });
@@ -59,22 +61,27 @@ void setup(){
     Serial.println("_a");
     request->send_P(200, "text/plain", "Unlocking all...");
   });
+  server.on("/auth_db", HTTP_GET, [](AsyncWebServerRequest *request){
+    
+    request->send_P(200, "text/plain", "Current device is now set as the database server. Sending data to tcp server on port 41.");
+  });
   server.begin();
 }
  
 void loop(){
+  WiFiClient tcp;
+  tcp.connect(tcp_db, 41);
   String s = Serial.readString();
   if(s[0] == '+') {
-    //add rec to database;
+    tcp.print(s);
+    delay(200);
+    tcp.readString();
   }
   else if(s[0] == '?') {
-    //request rec from database;
-    if(/*response positive*/) {
-      Serial.print("1");
-    }
-    else {
-      Serial.print("0");
-    }
+    tcp.print(s);
+    delay(200);
+    String res = tcp.readString();
+    Serial.print(res);
   }
   else if(s[0] == 'u') {
     if(s[1] == '0')
