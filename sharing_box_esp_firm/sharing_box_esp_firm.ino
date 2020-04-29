@@ -7,18 +7,41 @@
 const char* ssid     = "444-techteam";
 const char* password = "00000444";
 
-// current temperature & humidity, updated in loop()
 bool taken[3];
 
-// Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
 void setup(){
   Serial.begin(9600);
   WiFi.softAP(ssid, password);
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html);
-    // TODO: rewrite index-html interaction block
+    AsyncResponseStream *response = request->beginResponseStream("text/html");
+    response->print("<!DOCTYPE html><html><head><title>SHARING BOX by 444 Tech Team</title><style>");
+    response->print("div { display: flex; }");
+    response->print("</style></head><body><h1>SHARING BOX</h1><h3> by 444 Tech Team</h3><h2>Control panel</h2><hr>");
+    response->print("<div><p>Sec. 1 (Laptop):</p><p>");
+    if(taken[0])
+      response->print("Unavailable");
+    else
+      response->print("Available");
+    response->print("</div><button type=\"button\" onclick=\"window.location.href='/unlock1'\">Unlock</button>");
+    response->print("<div><p>Sec. 2 (HDMI): </p><p>");
+    if(taken[1])
+      response->print("Unavailable");
+    else
+      response->print("Available");
+    response->print("</p></div>");
+    response->print("<button type=\"button\" onclick=\"window.location.href='/unlock2'\">Unlock</button>");
+    response->print("<div><p>Sec. 3 (Remote): </p><p>");
+    if(taken[0])
+      response->print("Unavailable");
+    else
+      response->print("Available");
+    response->print("</p></div>");
+    response->print("<button type=\"button\" onclick=\"window.location.href='/unlock3'\">Unlock</button><hr>");
+    response->print("<button type=\"button\" onclick=\"window.location.href='/unlock_all'\">Unlock all</button>");
+    response->print("</body></html>");
+    request->send(response);
   });
   server.on("/unlock1", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println("u1");
@@ -40,11 +63,11 @@ void setup(){
 }
  
 void loop(){
-  char *s = Serial.readString();
-  if(s[0] == "+") {
+  String s = Serial.readString();
+  if(s[0] == '+') {
     //add rec to database;
   }
-  else if(s[0] == "?") {
+  else if(s[0] == '?') {
     //request rec from database;
     if(/*response positive*/) {
       Serial.print("1");
