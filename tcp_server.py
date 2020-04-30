@@ -19,7 +19,7 @@ class RequestHandler(socketserver.BaseRequestHandler):
         if str(data)[2] == '+':
             print('    Аренда...')
             line_prepender('database.txt', time.strftime("-%d.%m.%Y %H:%M:%S ", time.localtime()) + str(data)[3:-3] + '\n')
-            self.request.send(bytes('OK\n'.encode('ascii')))
+            self.request.send(bytes('OK\r\n'.encode('ascii')))
             print('Успешно.')
         else:
             print('    Возврат...')
@@ -37,7 +37,7 @@ class RequestHandler(socketserver.BaseRequestHandler):
             else:
                 resp = '0'
                 print('В доступе отказано: оборудование арендовано другим клиентом.')
-            self.request.send(bytes((resp + '\n').encode('ascii')))
+            self.request.send(bytes((resp + '\r\n').encode('ascii')))
         return
 
 
