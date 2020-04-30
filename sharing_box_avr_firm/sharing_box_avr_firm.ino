@@ -151,6 +151,7 @@ void select() {
 }
 
 void setup(void) {
+  Serial1.begin(115200);
   taken[0] = false;
   taken[1] = false;
   taken[2] = false;
