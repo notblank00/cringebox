@@ -6,7 +6,7 @@
 
 const char* ssid     = "444-techteam";
 const char* password = "00000444";
-const char* tcp_db = "";
+IPAddress tcp_db;
 
 bool taken[3];
 
@@ -62,7 +62,7 @@ void setup(){
     request->send_P(200, "text/plain", "Unlocking all...");
   });
   server.on("/auth_db", HTTP_GET, [](AsyncWebServerRequest *request){
-    
+    tcp_db = request->client()->remoteIP();
     request->send_P(200, "text/plain", "Current device is now set as the database server. Sending data to tcp server on port 41.");
   });
   server.begin();
