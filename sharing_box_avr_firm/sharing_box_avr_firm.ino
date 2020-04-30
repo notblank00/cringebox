@@ -8,9 +8,6 @@
 #define PN532_IRQ 12
 #define NEXT A4
 #define SELECT A3
-#define LOCK1 A1
-#define LOCK2 A2
-#define LOCK3 A5
 #define BCK 13
 #define FWD 4
 #define SEC_TIME 2000
@@ -26,60 +23,69 @@ const uint8_t G[] = {8, 7, 6};
 
 static Adafruit_PN532 nfc(PN532_IRQ, 100);
 static LiquidCrystal_I2C lcd(0x27, 20, 4);
-static Servo lck[3];
-
 static bool taken[3];
 
-char selected;
+uint8_t selected;
 
-void unlock(char num) {
-  lck[num].write(90);
-}
-
-void lock(char num) {
-  lck[num].write(0);
-}
-
-void extrude(char num) {
+void eject(uitn8_t num, uint8_t fct = 1) {
   digitalWrite(FWD, HIGH);
   analogWrite(PWM[num], 255);
-  delay(SEC_TIME);
+  delay(SEC_TIME / fct);
   analogWrite(PWM[num], 0);
+}
+
+void retract(uitn8_t num, uint8_t fct = 1) {
   digitalWrite(FWD, LOW);
-}
-
-void pull_back(char num) {
-  digitalWrite(BCK, HIGH);
   analogWrite(PWM[num], 255);
-  delay(SEC_TIME);
+  delay(SEC_TIME / t);
   analogWrite(PWM[num], 0);
-  digitalWrite(BCK, LOW);
 }
 
-void write_database(uint8_t uid[], uint8_t uidLength, bool op, char num) {
+void write_database(uint8_t uid[], uint8_t uidLength, uitn8_t num) {
+  Serial1.print("+");
+  Serial1.print(num);
+  Serial1.print(",");
+  for(uint8_t i = 0; i < uidLength - 1; i++) {
+    Serial1.print(uid[i]);
+    Serial1.print(":");
+  }
+  Serial1.print(uid[uidLength - 1]);
+  Serial1.print("\n\r");
 }
 
-bool request_auth(uint8_t uid[], uint8_t uidLength, char num) {
-  return true;
+bool request_auth(uint8_t uid[], uint8_t uidLength, uitn8_t num) {
+  Serial1.print("?");
+  Serial1.print(num);
+  Serial1.print(",");
+  for(uint8_t i = 0; i < uidLength - 1; i++) {
+    Serial1.print(uid[i]);
+    Serial1.print(":");
+  }
+  Serial1.print(uid[uidLength - 1]);
+  Serial1.print("\n\r");
+  delay(200);
+  String s = Serial1.readString();
+  if(s[0] == '1')
+    return true;
+  else
+    return false;
 }
 
-bool read_rfid(bool op, char num) {
+bool read_rfid(bool op, uint8_t num) {
   bool success = false;
   uint8_t uid[] = {0, 0, 0, 0, 0, 0, 0};
   uint8_t uidLength;
   success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, &uid[0], &uidLength, RFID_TIMEOUT);
   if(success) {
-    Serial.println("success");
     if(op) {
       bool auth;
       auth = request_auth(uid, uidLength, num);
       if(not auth)
         return false;
     }
-    write_database(uid, uidLength, op, num);
-  }
-  else {
-    Serial.println("govno");
+    else {
+      write_database(uid, uidLength, num);
+    }
   }
   return success;
 }
@@ -138,20 +144,13 @@ void select() {
       digitalWrite(R[selected], HIGH);
     }
     taken[selected] = !taken[selected];
-    unlock(selected);
-    delay(100);
-    extrude(selected);
+    eject(selected);
     delay(SEC_TIME);
-    pull_back(selected);
-    delay(100);
-    lock(selected);
+    retract(selected);
   }
 }
 
 void setup(void) {
-  lck[0].attach(LOCK1);
-  lck[1].attach(LOCK2);
-  lck[2].attach(LOCK3);
   taken[0] = false;
   taken[1] = false;
   taken[2] = false;
@@ -188,5 +187,29 @@ void loop(void) {
     switch_cursor();
   if(sel)
     select();
+  String sdata = Serial1.readString();
+  if(sdata[0] == '_') {
+    if(sdata[1] == '1') {
+      eject(0);
+      delay(4 * SEC_TIME);
+      retract(0);
+    }
+    else if(sdata[1] == '2') {
+      eject(1);
+      delay(4 * SEC_TIME);
+      retract(1);
+    }
+    else if(sdata[1] == '3') {
+      eject(2);
+      delay(4 * SEC_TIME);
+      retract(2);
+    }
+    else if(sdata[1] == 'a'){
+      eject(0, 3);
+      eject(1, 2);
+      eject(2);
+      delay(4 * SEC_TIME);
+    }
+  }
   delay(150);
 }
