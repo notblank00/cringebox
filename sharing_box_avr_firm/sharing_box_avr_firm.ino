@@ -13,9 +13,12 @@
 #define SEC_TIME 2000
 #define ERR_TIME 5000
 
-const uint8_t PWM[] = {5, 4, 3};
+const uint8_t PWM[] = {5, 4, 13};
 const uint8_t R[] = {11, 10, 9};
 const uint8_t G[] = {8, 7, 6};
+String tcp_db = "";
+const char cpage[814] PROGMEM = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>SHARING BOX by 444 Tech Team</title><style>div { display: flex; }</style></head><body><h1>SHARING BOX</h1><h3> by 444 Tech Team</h3><h2>Control panel</h2><hr><div><p>Sec. 1 (Laptop):</p></div><button type=\"button\" onclick=\"window.location.href='/?action=1'\">Unlock</button><div><p>Sec. 2 (HDMI): </p></div><button type=\"button\" onclick=\"window.location.href='/?action=2'\">Unlock</button><div><p>Sec. 3 (Remote): </p></div><button type=\"button\" onclick=\"window.location.href='/?action=3'\">Unlock</button><hr><button type=\"button\" onclick=\"window.location.href='/?action=a'\">Unlock all</button><button type=\"button\" onclick=\"window.location.href='/?action=d'\">This device is a database server</button></body></html>";
+const char hexstr[16] = "0123456789ABCDEF";
 
 // boolean opcodes :
 //   false - take
@@ -27,45 +30,63 @@ static bool taken[3];
 
 uint8_t selected;
 
-void eject(uitn8_t num, uint8_t fct = 1) {
+void eject(uint8_t num, uint8_t fct = 1) {
   digitalWrite(FWD, HIGH);
   analogWrite(PWM[num], 255);
   delay(SEC_TIME / fct);
   analogWrite(PWM[num], 0);
 }
 
-void retract(uitn8_t num, uint8_t fct = 1) {
+void retract(uint8_t num, uint8_t fct = 1) {
   digitalWrite(FWD, LOW);
   analogWrite(PWM[num], 255);
-  delay(SEC_TIME / t);
+  delay(SEC_TIME / fct);
   analogWrite(PWM[num], 0);
 }
 
-void write_database(uint8_t uid[], uint8_t uidLength, uitn8_t num) {
-  Serial1.print("+");
-  Serial1.print(num);
-  Serial1.print(",");
+void write_database(uint8_t uid[], uint8_t uidLength, uint8_t num) {
+  String request = "+";
+  char sec = '0' + num;
+  request += sec;
+  Serial1.print("AT+CIPSTART=9,TCP,");
+  Serial1.print(tcp_db);
+  Serial1.print(",41\r\n");
+  Serial1.print("AT+CIPSEND=9,");
+  request += ',';
   for(uint8_t i = 0; i < uidLength - 1; i++) {
-    Serial1.print(uid[i]);
-    Serial1.print(":");
+    request += hexstr[uid[i] / 16];
+    request += hexstr[uid[i] % 16];
   }
-  Serial1.print(uid[uidLength - 1]);
-  Serial1.print("\n\r");
+  request += hexstr[uid[uidLength - 1] / 16];
+  request += hexstr[uid[uidLength - 1] % 16];
+  Serial1.print(request.length());
+  Serial1.print("\r\n");
+  Serial1.print(request);
+  Serial1.print("\r\n");
 }
 
-bool request_auth(uint8_t uid[], uint8_t uidLength, uitn8_t num) {
-  Serial1.print("?");
-  Serial1.print(num);
-  Serial1.print(",");
+bool request_auth(uint8_t uid[], uint8_t uidLength, uint8_t num) {
+  String request = "?";
+  char sec = '0' + num;
+  request += sec;
+  Serial1.print("AT+CIPSTART=9,TCP,");
+  Serial1.print(tcp_db);
+  Serial1.print(",41\r\n");
+  Serial1.print("AT+CIPSEND=9,");
+  request += ',';
   for(uint8_t i = 0; i < uidLength - 1; i++) {
-    Serial1.print(uid[i]);
-    Serial1.print(":");
+    request += hexstr[uid[i] / 16];
+    request += hexstr[uid[i] % 16];
   }
-  Serial1.print(uid[uidLength - 1]);
-  Serial1.print("\n\r");
-  delay(200);
-  String s = Serial1.readString();
-  if(s[0] == '1')
+  request += hexstr[uid[uidLength - 1] / 16];
+  request += hexstr[uid[uidLength - 1] % 16];
+  Serial1.print(request.length());
+  Serial1.print("\r\n");
+  Serial1.print(request);
+  Serial1.print("\r\n");
+  delay(1000);
+  Serial1.print("AT+CIPCLOSE=9");
+  if(Serial1.find("+IPD,9,1:1"))
     return true;
   else
     return false;
@@ -125,7 +146,7 @@ void switch_cursor() {
 void show_error_reboot() {
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("GOVNO");
+  lcd.print("ERROR!");
   delay(ERR_TIME);
   show_menu();
 }
@@ -144,14 +165,30 @@ void select() {
       digitalWrite(R[selected], HIGH);
     }
     taken[selected] = !taken[selected];
-    eject(selected);
+    eject(selected, 1);
     delay(SEC_TIME);
-    retract(selected);
+    retract(selected, 1);
   }
 }
 
 void setup(void) {
-  Serial1.begin(115200);
+  Serial.begin(9600);
+  selected = 0;
+  Serial1.begin(9600);
+  delay(1000);
+  Serial1.print("AT+CWMODE=3\r\n");
+  delay(200);
+  Serial1.print("AT+CWSAP=\"444\",\"444techteam\",1,3");
+  delay(200);
+  Serial1.print("AT+CIPMUX=1\r\n");
+  delay(200);
+  Serial1.print("AT+CIPSERVER=1\r\n");
+  delay(200);
+  Serial1.print("AT+CIFSR");
+  delay(200);
+  while(Serial1.available())
+    Serial.print(Serial1.read());
+  Serial.print("\r\n");
   taken[0] = false;
   taken[1] = false;
   taken[2] = false;
@@ -188,28 +225,111 @@ void loop(void) {
     switch_cursor();
   if(sel)
     select();
-  String sdata = Serial1.readString();
-  if(sdata[0] == '_') {
-    if(sdata[1] == '1') {
-      eject(0);
-      delay(4 * SEC_TIME);
-      retract(0);
+  if(Serial1.available()) {
+    if(Serial1.find("+IPD,")) {
+      delay(1000);
+      uint8_t c_id = Serial1.read() - 48;
+      if(Serial1.find("action=")) {
+        char action = Serial1.read();
+        if(action == '1') {
+          eject(1);
+          String response = "HTTP/1.1 200 OK\nContent-Type: text/html\n\n<!DOCTYPE HTML>\n<html>\nUnlocking Sec. 1...\n</html>\r\n";
+          Serial1.print("AT+CIPSEND=");
+          Serial1.print(c_id);
+          Serial1.print(",");
+          Serial1.print(response.length());
+          Serial1.print("\r\n");
+          Serial1.print(response);
+          Serial1.print("AT+CIPCLOSE=");
+          Serial1.print(c_id);
+          Serial1.print("\r\n");
+          delay(10000);
+          retract(1);
+        }
+        else if(action == '2') {
+          eject(2);
+          String response = "HTTP/1.1 200 OK\nContent-Type: text/html\n\n<!DOCTYPE HTML>\n<html>\nUnlocking Sec. 2...\n</html>\r\n";
+          Serial1.print("AT+CIPSEND=");
+          Serial1.print(c_id);
+          Serial1.print(",");
+          Serial1.print(response.length());
+          Serial1.print("\r\n");
+          Serial1.print(response);
+          Serial1.print("AT+CIPCLOSE=");
+          Serial1.print(c_id);
+          Serial1.print("\r\n");
+          delay(10000);
+          retract(2);
+        }
+        else if(action == '3') {
+          eject(3);
+          String response = "HTTP/1.1 200 OK\nContent-Type: text/html\n\n<!DOCTYPE HTML>\n<html>\nUnlocking Sec. 3...\n</html>\r\n";
+          Serial1.print("AT+CIPSEND=");
+          Serial1.print(c_id);
+          Serial1.print(",");
+          Serial1.print(response.length());
+          Serial1.print("\r\n");
+          Serial1.print(response);
+          Serial1.print("AT+CIPCLOSE=");
+          Serial1.print(c_id);
+          Serial1.print("\r\n");
+          delay(10000);
+          retract(3);
+        }
+        else if(action == 'a') {
+          eject(1, 3);
+          eject(2, 2);
+          eject(3);
+          String response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>\r\nUnlocking all...\r\n</html>\r\n";
+          Serial1.print("AT+CIPSEND=");
+          Serial1.print(c_id);
+          Serial1.print(",");
+          Serial1.print(response.length());
+          Serial1.print("\r\n");
+          Serial1.print(response);
+          Serial1.print("AT+CIPCLOSE=");
+          Serial1.print(c_id);
+          Serial1.print("\r\n");
+          delay(10000);
+          retract(1, 3);
+          retract(2, 2);
+          retract(3);
+        }
+        else if(action == 'd') {
+          Serial1.find("Host: ");
+          tcp_db = "";
+          char p = Serial1.read();
+          while(((p - 48 >= 0) && (p - 48 <= 9)) || (p == '.')) {
+            tcp_db += p;
+            p = Serial1.read();
+          }
+          String response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>\r\nUnlocking Sec. 3...\r\n</html>\r\n";
+          Serial1.print("AT+CIPSEND=");
+          Serial1.print(c_id);
+          Serial1.print(",");
+          Serial1.print(response.length());
+          Serial1.print("\r\n");
+          Serial1.print(response);
+          Serial1.print("AT+CIPCLOSE=");
+          Serial1.print(c_id);
+          Serial1.print("\r\n");
+        }
+      }
+      else {
+        Serial1.print("AT+CIPSEND=");
+        Serial1.print(c_id);
+        Serial1.print(",");
+        Serial1.print(814);
+        Serial1.print("\r\n");
+        Serial1.print(cpage);
+        Serial1.print("AT+CIPCLOSE=");
+        Serial1.print(c_id);
+        Serial1.print("\r\n");
+      }
     }
-    else if(sdata[1] == '2') {
-      eject(1);
-      delay(4 * SEC_TIME);
-      retract(1);
-    }
-    else if(sdata[1] == '3') {
-      eject(2);
-      delay(4 * SEC_TIME);
-      retract(2);
-    }
-    else if(sdata[1] == 'a'){
-      eject(0, 3);
-      eject(1, 2);
-      eject(2);
-      delay(4 * SEC_TIME);
+    char temp;
+    while(Serial1.available()) {
+      temp = Serial1.read();
     }
   }
   delay(150);
